@@ -35,6 +35,35 @@ import gevent_zmq as zmq
 from .context import Context
 
 
+
+import datetime
+import array
+from decimal import Decimal
+
+def default(obj):
+    if isinstance(obj, array.array) and obj.typecode == 'd':
+        return msgpack.ExtType(42, obj.tostring())
+    if isinstance(obj, Decimal):
+        return msgpack.ExtType(43, str(obj))
+    raise TypeError("Unknown type: %r" % (obj,))
+
+def ext_hook(code, data):
+    if code == 42:
+        a = array.array('d')
+        a.fromstring(data)
+        return a
+    if code == 43:
+        a = Decimal(data)
+        return a
+    return ExtType(code, data)
+
+
+
+
+
+
+
+
 class Sender(object):
 
     def __init__(self, socket):
@@ -137,11 +166,11 @@ class Event(object):
         return self._args
 
     def pack(self):
-        return msgpack.Packer().pack((self._header, self._name, self._args))
+        return msgpack.Packer(default=default).pack((self._header, self._name, self._args))
 
     @staticmethod
     def unpack(blob):
-        unpacker = msgpack.Unpacker()
+        unpacker = msgpack.Unpacker(ext_hook=ext_hook)
         unpacker.feed(blob)
         unpacked_msg = unpacker.unpack()
 
